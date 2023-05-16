@@ -42,7 +42,6 @@
 // #define TYPE int
 
 
-
 int nThreads;		// numero efetivo de threads
 					// obtido da linha de comando
 int nTotalElements; // numero total de elementos
@@ -59,104 +58,158 @@ pthread_barrier_t myBarrier;
 
 volatile TYPE partialSum[MAX_THREADS];
    
-int min(int a, int b)
-{
-	if (a < b)
+int min(int a, int b){
+	if (a < b){
 		return a;
-	else
+	}
+	else {
 		return b;
+	}
 }
 
-void verifyPrefixSum( const TYPE *InputVec, 
-                      const TYPE *OutputVec, 
-                      long nTotalElmts )
-{
+void verifyPrefixSum(const TYPE *InputVec, const TYPE *OutputVec, long nTotalElmts){
     volatile TYPE last = InputVec[0];
     int ok = 1;
-    for( long i=1; i<nTotalElmts ; i++ ) {
-           if( OutputVec[i] != (InputVec[i] + last) ) {
-               fprintf( stderr, "In[%ld]= %ld\n"
-                                "Out[%ld]= %ld (wrong result!)\n"
-                                "Out[%ld]= %ld (ok)\n"
-                                "last=%ld\n" , 
-                                     i, InputVec[i],
-                                     i, OutputVec[i],
-                                     i-1, OutputVec[i-1],
-                                     last );
-               ok = 0;
-               break;
-           }
-           last = OutputVec[i];    
+
+    for(long i=1; i<nTotalElmts ; i++) {
+		if( OutputVec[i] != (InputVec[i] + last) ){
+			fprintf(
+				stderr, 
+				"In[%ld]= %ld\n"
+				"Out[%ld]= %ld (wrong result!)\n"
+				"Out[%ld]= %ld (ok)\n"
+				"last=%ld\n", 
+				i, InputVec[i],
+				i, OutputVec[i],
+				i-1, OutputVec[i-1],
+				last
+			);
+
+			ok = 0;
+			break;
+		}
+
+		last = OutputVec[i];    
     }  
-    if( ok )
-       printf( "\nPrefix Sum verified correctly.\n" );
-    else
-       printf( "\nPrefix Sum DID NOT compute correctly!!!\n" );   
+    
+	if( ok ){
+		printf( "\nPrefix Sum verified correctly.\n" );
+	}
+    else {
+		printf( "\nPrefix Sum DID NOT compute correctly!!!\n" );   
+	}
 }
 
-
-
-void *reducePartialSum(void *ptr)
-{
+void *reducePartialSum(void *ptr){
     int myIndex = *((int *)ptr);
     int nElements = nTotalElements / nThreads;
     
     // assume que temos pelo menos 1 elemento por thhread
     int first = myIndex * nElements;
-    int last = min( (myIndex+1) * nElements, nTotalElements ) - 1;
+    int last = min((myIndex + 1) * nElements, nTotalElements ) - 1;
 
     #if DEBUG == 1
       printf("thread %d here! first=%d last=%d\n", myIndex, first, last );
     #endif
     
-//    if( myIndex != 0 )
-    while( true ) {
-    
+	// if( myIndex != 0 )
+    while(true) {
         // all worker threads will be waiting here for the caller thread
-        pthread_barrier_wait( &myBarrier );    
+        pthread_barrier_wait(&myBarrier);    
         
-       // work with my chunck
-       register TYPE myPartialSum = 0;
+		// work with my chunck
+		register TYPE myPartialSum = 0;
 
-       for( int i=first; i<=last ; i++ )
-           //partialSum = plus( partialSum, InputVector[i] );
-           myPartialSum += InputVector[i];
+		for(int i = first; i <= last ; i++){
+			//partialSum = plus( partialSum, InputVector[i] );
+			myPartialSum += InputVector[i];
+		}
 
-       // store my result 
-       partialSum[ myIndex ] = myPartialSum;     
-        
-       pthread_barrier_wait( &myBarrier );    
-       if( myIndex == 0 )
-          return NULL;           // return to caller thread
-          
+		// store my result 
+		partialSum[myIndex] = myPartialSum;     
+			
+		pthread_barrier_wait(&myBarrier);    
+
+        if( myIndex == 0 ){
+			return NULL;           // return to caller thread
+		}
     }
     
     // NEVER HERE!
-    if( myIndex != 0 )
-          pthread_exit( NULL );
+    if( myIndex != 0 ){
+		pthread_exit( NULL );
+	}
 }
 
+TYPE parallelReduceSum(pthread_t *Thread, int *my_thread_id){
+    static int initialized = 0;
+    
+    if(!initialized ){ 
+		pthread_barrier_init(&myBarrier, NULL, nThreads);
+		// thread 0 will be the caller thread
+		
+		// cria todas as outra threds trabalhadoras
+		my_thread_id[0] = 0;
+		for(int i = 1; i < nThreads; i++){
+			my_thread_id[i] = i;
+			pthread_create(&Thread[i], NULL, reducePartialSum, &my_thread_id[i]);
+		}
 
+		initialized = 1;
+    }
 
+	reducePartialSum(&my_thread_id[0]);
+	return 1;
 
+    // above, int this version, all other worker threads from 1 to nThreads will 
+    //   start working imediatelly (no barriers to start working)
+    
+    // caller thread will be thread 0, and will start working on its chunk
+    // reducePartialSum( &my_thread_id[0] ); 
+        
+    // chegando aqui todas as threads sincronizaram, 
+    //  na barreira no final da funçao reducePartialSum (até a 0)
+    //  entao o vertor de somasPartcias estah pronto
+    
+    // a thread chamadora faz, entao, a reduçao da soma global
+    // element_TYPE globalSum = 0;
+    // for( int i=0; i<nThreads ; i++ ) {
+    //     //printf( "globalSum = %f\n", globalSum );
+    //     globalSum += partialSum[i];
+    // }    
+    
+    // isso é necessário ?
+    //pthread_barrier_destroy( &myBarrier );
+    
+    // obs: como as threads trabalhadoras sincronizaram e irão terminar,
+    //      não é necessário esperar o término delas
+    
+    // return globalSum;
+}
 
-void ParallelPrefixSumPth( const TYPE *InputVec, 
-                           const TYPE *OutputVec, 
-                           long nTotalElmts,
-                           int nThreads )
-{
-   pthread_t Thread[MAX_THREADS];
-   int my_thread_id[MAX_THREADS];
-   
+void ParallelPrefixSumPth( const TYPE *InputVec, const TYPE *OutputVec, long nTotalElmts, int nThreads ){
+	pthread_t Thread[MAX_THREADS];
+	int my_thread_id[MAX_THREADS];
+	
 
-   ///////////////// INCLUIR AQUI SEU CODIGO da V1 /////////
-   
-   // criar o POOL de threads aqui!
-   
-   // voce pode criar outras funcoes para as suas threads
-   
-   //////////////////////////////////////////////////////////
-   
+	parallelReduceSum(Thread, my_thread_id);
+	for (int i = 0; i < nThreads; i++){
+		printf("%ld ", partialSum[i]);
+	}
+	printf("\n");
+
+	for (int i = 0; i < nTotalElements; i++){
+		printf("%ld ", InputVec[i]);
+	}
+	printf("\n");
+		
+	///////////////// INCLUIR AQUI SEU CODIGO da V1 /////////
+	
+	// criar o POOL de threads aqui!
+	
+	// voce pode criar outras funcoes para as suas threads
+	
+	//////////////////////////////////////////////////////////
 }
 
 int main(int argc, char *argv[])
