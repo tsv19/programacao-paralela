@@ -113,7 +113,7 @@ void *reducePartialSum(void *ptr){
 		pthread_barrier_wait(&myBarrier);    
 		register TYPE myPartialSum = 0;
 
-		for(int i = first; i <= last ; i++){
+		for(int i = first; i < last ; i++){
 			myPartialSum += InputVector[i];
 		}
 
