@@ -107,7 +107,7 @@ void *reducePartialSum(void *ptr){
     
     // assume que temos pelo menos 1 elemento por thhread
     int first = myId * nElements;
-    int last = min( (myId + 1) * nElements, nTotalElements ) -1;
+    int last = min( (myId + 1) * nElements, nTotalElements );
 
 	while (true){
 		pthread_barrier_wait(&myBarrier);    
