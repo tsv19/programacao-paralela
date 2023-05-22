@@ -101,45 +101,44 @@ void verifyPrefixSum(const TYPE *InputVec, const TYPE *OutputVec, long nTotalElm
 }
 
 void *reducePartialSum(void *ptr){
-    int myIndex = *((int *)ptr);
+    int myId = *((int *)ptr);
 
     int nElements = (nTotalElements + nThreads - 1) / nThreads;
     
     // assume que temos pelo menos 1 elemento por thhread
-    int first = myIndex * nElements;
-    int last = min( (myIndex + 1) * nElements, nTotalElements );
+    int first = myId * nElements;
+    int last = min( (myId + 1) * nElements, nTotalElements ) -1;
 
 	while (true){
 		pthread_barrier_wait(&myBarrier);    
-		register TYPE myPartialSum = 0;
+		register TYPE myPartialLocalSum = 0;
 
 		for(int i = first; i < last ; i++){
 			myPartialSum += InputVector[i];
 		}
 
-		partialSum[myIndex] = myPartialSum;     
+		partialSum[myId] = myPartialLocalSum;     
 			
 		pthread_barrier_wait(&myBarrier);    
 
-		myPartialSum = 0;
-		for (int i =0; i < myIndex; i++){
-			myPartialSum += partialSum[i];
+		myPartialLocalSum = 0;
+		for (int i =0; i < myId; i++){
+			myPartialLocalSum += partialSum[i];
 		}
 
-		
-		OutputVector[first] = InputVector[first] + myPartialSum;
+		OutputVector[first] = InputVector[first] + myPartialLocalSum;
 		for (int i = first + 1; i < last; i++){
 			OutputVector[i] = InputVector[i] + OutputVector[i - 1];
 		}
 
 		pthread_barrier_wait(&myBarrier);
 
-		if ( !myIndex ){
+		if ( !myId ){
 			return NULL;
 		}
 	}
 
-	if ( myIndex != 0 ){
+	if ( myId != 0 ){
 		pthread_exit(NULL);           // return to caller thread
 	}	
 }
@@ -167,16 +166,6 @@ void ParallelPrefixSumPth( const TYPE *InputVec, const TYPE *OutputVec, long nTo
 	pthread_t Thread[MAX_THREADS];
 	int my_thread_id[MAX_THREADS];
 	
-
-	///////////////// INCLUIR AQUI SEU CODIGO da V1 /////////
-	
-	// criar o POOL de threads aqui!
-	
-	// voce pode criar outras funcoes para as suas threads
-	
-	//////////////////////////////////////////////////////////
-
-
 	parallelReduceSum(InputVec, Thread, my_thread_id);
 }
 
