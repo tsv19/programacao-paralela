@@ -128,7 +128,7 @@ void *reducePartialSum(void *ptr){
 
 		
 		OutputVector[first] = InputVector[first] + myPartialSum;
-		for (int i = first + 1; i <= last; i++){
+		for (int i = first + 1; i < last; i++){
 			OutputVector[i] = InputVector[i] + OutputVector[i - 1];
 		}
 
