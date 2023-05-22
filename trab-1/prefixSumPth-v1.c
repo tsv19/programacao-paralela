@@ -114,7 +114,7 @@ void *reducePartialSum(void *ptr){
 		register TYPE myPartialLocalSum = 0;
 
 		for(int i = first; i < last ; i++){
-			myPartialSum += InputVector[i];
+			myPartialLocalSum += InputVector[i];
 		}
 
 		partialSum[myId] = myPartialLocalSum;     
