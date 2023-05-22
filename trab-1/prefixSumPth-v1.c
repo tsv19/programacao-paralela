@@ -102,46 +102,41 @@ void verifyPrefixSum(const TYPE *InputVec, const TYPE *OutputVec, long nTotalElm
 
 void *reducePartialSum(void *ptr){
     int myIndex = *((int *)ptr);
-    int nElements = nTotalElements / nThreads;
+
+    int nElements = (nTotalElements + nThreads - 1) / nThreads;
     
     // assume que temos pelo menos 1 elemento por thhread
     int first = myIndex * nElements;
-    int last = min((myIndex + 1) * nElements, nTotalElements ) - 1;
+    int last = min( (myIndex + 1) * nElements, nTotalElements ) - 1;
 
-    #if DEBUG == 1
-      printf("thread %d here! first=%d last=%d\n", myIndex, first, last );
-    #endif
-    
-	// if( myIndex != 0 )
-    while(true) {
-        // all worker threads will be waiting here for the caller thread
-        pthread_barrier_wait(&myBarrier);    
-        
-		// work with my chunck
-		register TYPE myPartialSum = 0;
+	register TYPE myPartialSum = 0;
 
-		for(int i = first; i <= last ; i++){
-			//partialSum = plus( partialSum, InputVector[i] );
-			myPartialSum += InputVector[i];
-		}
-
-		// store my result 
-		partialSum[myIndex] = myPartialSum;     
-			
-		pthread_barrier_wait(&myBarrier);    
-
-        if( myIndex == 0 ){
-			return NULL;           // return to caller thread
-		}
-    }
-    
-    // NEVER HERE!
-    if( myIndex != 0 ){
-		pthread_exit( NULL );
+	for(int i = first; i <= last ; i++){
+		myPartialSum += InputVector[i];
 	}
+
+	partialSum[myIndex] = myPartialSum;     
+		
+	pthread_barrier_wait(&myBarrier);    
+
+	myPartialSum = 0;
+	for (int i =0; i < myIndex; i++){
+		myPartialSum += partialSum[i];
+	}
+
+	int i = first;
+	OutputVector[i] = InputVector[i] + myPartialSum;
+	i++;
+	for (; i <= last; i++){
+		OutputVector[i] = InputVector[i] + OutputVector[i - 1];
+	}
+
+	pthread_barrier_wait(&myBarrier);    
+
+	return NULL;           // return to caller thread
 }
 
-TYPE parallelReduceSum(pthread_t *Thread, int *my_thread_id){
+TYPE parallelReduceSum(const TYPE *InputVec, pthread_t *Thread, int *my_thread_id){
     static int initialized = 0;
     
     if(!initialized ){ 
@@ -160,31 +155,6 @@ TYPE parallelReduceSum(pthread_t *Thread, int *my_thread_id){
 
 	reducePartialSum(&my_thread_id[0]);
 	return 1;
-
-    // above, int this version, all other worker threads from 1 to nThreads will 
-    //   start working imediatelly (no barriers to start working)
-    
-    // caller thread will be thread 0, and will start working on its chunk
-    // reducePartialSum( &my_thread_id[0] ); 
-        
-    // chegando aqui todas as threads sincronizaram, 
-    //  na barreira no final da funçao reducePartialSum (até a 0)
-    //  entao o vertor de somasPartcias estah pronto
-    
-    // a thread chamadora faz, entao, a reduçao da soma global
-    // element_TYPE globalSum = 0;
-    // for( int i=0; i<nThreads ; i++ ) {
-    //     //printf( "globalSum = %f\n", globalSum );
-    //     globalSum += partialSum[i];
-    // }    
-    
-    // isso é necessário ?
-    //pthread_barrier_destroy( &myBarrier );
-    
-    // obs: como as threads trabalhadoras sincronizaram e irão terminar,
-    //      não é necessário esperar o término delas
-    
-    // return globalSum;
 }
 
 void ParallelPrefixSumPth( const TYPE *InputVec, const TYPE *OutputVec, long nTotalElmts, int nThreads ){
@@ -192,17 +162,6 @@ void ParallelPrefixSumPth( const TYPE *InputVec, const TYPE *OutputVec, long nTo
 	int my_thread_id[MAX_THREADS];
 	
 
-	parallelReduceSum(Thread, my_thread_id);
-	for (int i = 0; i < nThreads; i++){
-		printf("%ld ", partialSum[i]);
-	}
-	printf("\n");
-
-	for (int i = 0; i < nTotalElements; i++){
-		printf("%ld ", InputVec[i]);
-	}
-	printf("\n");
-		
 	///////////////// INCLUIR AQUI SEU CODIGO da V1 /////////
 	
 	// criar o POOL de threads aqui!
@@ -210,6 +169,9 @@ void ParallelPrefixSumPth( const TYPE *InputVec, const TYPE *OutputVec, long nTo
 	// voce pode criar outras funcoes para as suas threads
 	
 	//////////////////////////////////////////////////////////
+
+
+	parallelReduceSum(InputVec, Thread, my_thread_id);
 }
 
 int main(int argc, char *argv[])
