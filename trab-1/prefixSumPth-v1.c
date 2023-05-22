@@ -107,33 +107,41 @@ void *reducePartialSum(void *ptr){
     
     // assume que temos pelo menos 1 elemento por thhread
     int first = myIndex * nElements;
-    int last = min( (myIndex + 1) * nElements, nTotalElements ) - 1;
+    int last = min( (myIndex + 1) * nElements, nTotalElements );
 
-	register TYPE myPartialSum = 0;
+	while (true){
+		pthread_barrier_wait(&myBarrier);    
+		register TYPE myPartialSum = 0;
 
-	for(int i = first; i <= last ; i++){
-		myPartialSum += InputVector[i];
-	}
+		for(int i = first; i <= last ; i++){
+			myPartialSum += InputVector[i];
+		}
 
-	partialSum[myIndex] = myPartialSum;     
+		partialSum[myIndex] = myPartialSum;     
+			
+		pthread_barrier_wait(&myBarrier);    
+
+		myPartialSum = 0;
+		for (int i =0; i < myIndex; i++){
+			myPartialSum += partialSum[i];
+		}
+
 		
-	pthread_barrier_wait(&myBarrier);    
+		OutputVector[first] = InputVector[first] + myPartialSum;
+		for (int i = first + 1; i <= last; i++){
+			OutputVector[i] = InputVector[i] + OutputVector[i - 1];
+		}
 
-	myPartialSum = 0;
-	for (int i =0; i < myIndex; i++){
-		myPartialSum += partialSum[i];
+		pthread_barrier_wait(&myBarrier);
+
+		if ( !myIndex ){
+			return NULL;
+		}
 	}
 
-	int i = first;
-	OutputVector[i] = InputVector[i] + myPartialSum;
-	i++;
-	for (; i <= last; i++){
-		OutputVector[i] = InputVector[i] + OutputVector[i - 1];
-	}
-
-	pthread_barrier_wait(&myBarrier);    
-
-	return NULL;           // return to caller thread
+	if ( myIndex != 0 ){
+		pthread_exit(NULL);           // return to caller thread
+	}	
 }
 
 TYPE parallelReduceSum(const TYPE *InputVec, pthread_t *Thread, int *my_thread_id){
@@ -141,16 +149,14 @@ TYPE parallelReduceSum(const TYPE *InputVec, pthread_t *Thread, int *my_thread_i
     
     if(!initialized ){ 
 		pthread_barrier_init(&myBarrier, NULL, nThreads);
-		// thread 0 will be the caller thread
+		initialized = 1;
 		
-		// cria todas as outra threds trabalhadoras
 		my_thread_id[0] = 0;
 		for(int i = 1; i < nThreads; i++){
 			my_thread_id[i] = i;
 			pthread_create(&Thread[i], NULL, reducePartialSum, &my_thread_id[i]);
 		}
 
-		initialized = 1;
     }
 
 	reducePartialSum(&my_thread_id[0]);
